@@ -1,48 +1,66 @@
-def can_achieve(target, N, R, K, cameras):
-    total_added = 0
-    shield = [0] * N
-    prefix = [0] * (N + 1)
-    
-    for i in range(N):
-        prefix[i + 1] = prefix[i] + cameras[i]
+MOD = 10 ** 9 + 7
 
-    for i in range(N):
-        left = max(0, i - R)
-        right = min(N - 1, i + R)
-        shield[i] = prefix[right + 1] - prefix[left]
+# Precompute all valid L-tile masks within a 2x2 grid
+def generate_l_shapes():
+    shapes = []
+    for i in range(2):
+        for j in range(2):
+            # remove (i,j) from 2x2 block
+            shape = [(x, y) for x in range(2) for y in range(2) if (x, y) != (i, j)]
+            shapes.append(shape)
+    return shapes
 
-    diff = [0] * (N + 2)
-    window_add = 0
+def solve_tiling(N, M):
+    if (N * M) % 3 != 0:
+        return 0
 
-    for i in range(N):
-        window_add += diff[i]
-        if shield[i] + window_add < target:
-            need = target - (shield[i] + window_add)
-            pos = min(N - 1, i + R)
-            diff[pos] += need
-            if pos + 2 * R + 1 < N:
-                diff[pos + 2 * R + 1] -= need
-            window_add += need
-            total_added += need
-            if total_added > K:
-                return False
-    return True
+    from functools import lru_cache
 
+    l_shapes = generate_l_shapes()
 
-def maximize_weakest_defense(N, R, K, cameras):
-    low, high = 0, sum(cameras) + K
-    answer = 0
-    while low <= high:
-        mid = (low + high) // 2
-        if can_achieve(mid, N, R, K, cameras):
-            answer = mid
-            low = mid + 1
-        else:
-            high = mid - 1
-    return answer
+    @lru_cache(None)
+    def dp(col, mask):
+        if col == M:
+            return 1 if mask == 0 else 0
+        res = 0
 
+        def dfs(r, msk, new_mask):
+            if r >= N:
+                res = dp(col + 1, new_mask)
+                return res
+            if (msk >> r) & 1:
+                return dfs(r + 1, msk, new_mask)
+            total = 0
+            for shape in l_shapes:
+                valid = True
+                temp = msk
+                temp_new = new_mask
+                for dx, dy in shape:
+                    x = r + dx
+                    y = dy
+                    if x >= N or y >= 2:
+                        valid = False
+                        break
+                    if y == 0:
+                        if (temp >> x) & 1:
+                            valid = False
+                            break
+                        temp |= (1 << x)
+                    else:
+                        if (temp_new >> x) & 1:
+                            valid = False
+                            break
+                        temp_new |= (1 << x)
+                if valid:
+                    total = (total + dfs(r + 1, temp, temp_new)) % MOD
+            return total
 
-# -------- Input ----------
-N, R, K = map(int, input().split())
-cameras = list(map(int, input().split()))
-print(maximize_weakest_defense(N, R, K, cameras))
+        res = dfs(0, mask, 0)
+        return res
+
+    return dp(0, 0)
+
+# Example usage:
+print(solve_tiling(2, 3))     # Output: 2
+print(solve_tiling(4, 6))     # Output: 18
+print(solve_tiling(10, 4000)) # Output: 0
